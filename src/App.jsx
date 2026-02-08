@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { initApp } from "./appLogic";
 
+const SCENE_REDIRECT_URL = "https://mccreatorstudio.com/scenecreator";
+
 const characterNameStyle = {
   textAlign: "center",
   fontWeight: "bold",
@@ -21,6 +23,10 @@ export default function App() {
 
   useEffect(() => {
     if (isSceneMode) return undefined;
+    if (shouldRedirectToSceneCreator()) {
+      window.location.replace(SCENE_REDIRECT_URL);
+      return undefined;
+    }
     return initHomeUi();
   }, [isSceneMode]);
 
@@ -381,6 +387,18 @@ export default function App() {
       </div>
     </>
   );
+}
+
+function shouldRedirectToSceneCreator() {
+  if (typeof window === "undefined") return false;
+  const { hostname, href } = window.location;
+  const hostValue = hostname.toLowerCase();
+  const isIpHost = /^\d{1,3}(\.\d{1,3}){3}$/.test(hostValue);
+  const isLocal = hostValue === "localhost" || hostValue.endsWith(".local") || isIpHost;
+
+  if (isLocal) return false;
+  if (href.startsWith(SCENE_REDIRECT_URL)) return false;
+  return true;
 }
 
 function getAppMode() {
