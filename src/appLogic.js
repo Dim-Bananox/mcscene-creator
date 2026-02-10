@@ -757,39 +757,36 @@ export function initApp() {
       }
 
       try {
-        const uuidResponse = await fetch(
-          `/mojang/users/profiles/minecraft/${encodeURIComponent(cleanName)}`
-        );
-        if (!uuidResponse.ok) throw new Error(t("playerNotFound"));
+        /* Use CORS-friendly APIs that return the raw skin texture PNG directly.
+           Primary: minotar.net  —  Fallback: mc-heads.net */
+        const skinApis = [
+          `https://minotar.net/skin/${encodeURIComponent(cleanName)}`,
+          `https://mc-heads.net/skin/${encodeURIComponent(cleanName)}`
+        ];
 
-        const uuidData = await uuidResponse.json();
-        if (!uuidData?.id) throw new Error(t("playerNotFound"));
+        let skinBlobUrl = null;
+        for (const apiUrl of skinApis) {
+          try {
+            const resp = await fetch(apiUrl);
+            if (!resp.ok) continue;
+            const blob = await resp.blob();
+            if (blob.size < 100) continue;           // too small = error page
+            if (!blob.type.startsWith("image/")) continue;
+            skinBlobUrl = URL.createObjectURL(blob);
+            break;
+          } catch (_) {
+            /* try the next API */
+          }
+        }
 
-        const profileResponse = await fetch(
-          `/session/session/minecraft/profile/${encodeURIComponent(uuidData.id)}`
-        );
-        if (!profileResponse.ok) throw new Error(t("failedFetchSkin"));
+        if (!skinBlobUrl) throw new Error(t("playerNotFound"));
 
-        const profileData = await profileResponse.json();
-        const texturesProp = profileData?.properties?.find(
-          prop => prop.name === "textures"
-        );
-        if (!texturesProp?.value) throw new Error(t("noSkinFound"));
-
-        const decoded = JSON.parse(atob(texturesProp.value));
-        const skinUrl = decoded?.textures?.SKIN?.url;
-        if (!skinUrl) throw new Error(t("noSkinFound"));
-
-        const proxiedSkinUrl = skinUrl.startsWith("https://textures.minecraft.net")
-          ? skinUrl.replace("https://textures.minecraft.net", "/textures")
-          : skinUrl;
-
-        setSkin(proxiedSkinUrl);
+        setSkin(skinBlobUrl);
         const existingIndex = uploadedSkins.findIndex(s => s.name === cleanName);
         if (existingIndex >= 0) {
-          uploadedSkins[existingIndex].url = proxiedSkinUrl;
+          uploadedSkins[existingIndex].url = skinBlobUrl;
         } else {
-          uploadedSkins.push({ name: cleanName, url: proxiedSkinUrl });
+          uploadedSkins.push({ name: cleanName, url: skinBlobUrl });
         }
         renderUploadedSkins();
         await openModal({
